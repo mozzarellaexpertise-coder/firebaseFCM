@@ -1,27 +1,36 @@
 import admin from 'firebase-admin';
-import { env } from '$env/dynamic/private';
 
-export function getFCM() {
-    // 1. If already initialized, return the messaging instance
+let app: admin.app.App | null = null;
+
+function initFirebase() {
     if (admin.apps.length > 0) {
-        return admin.messaging();
+        app = admin.app();
+        return;
     }
 
-    // 2. Check if variables exist (prevents the 'project_id' error during build)
-    if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY) {
-        // We return a "dummy" or throw a silent warning during build
-        console.warn("Firebase vars not found. If this is a build step, it's fine.");
-        return null; 
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    if (!projectId || !clientEmail || !privateKey) {
+        throw new Error('Missing Firebase Admin environment variables');
     }
 
-    // 3. Initialize
-    admin.initializeApp({
+    app = admin.initializeApp({
         credential: admin.credential.cert({
-            projectId: env.FIREBASE_PROJECT_ID,
-            clientEmail: env.FIREBASE_CLIENT_EMAIL,
-            privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+            projectId,
+            clientEmail,
+            privateKey: privateKey.replace(/\\n/g, '\n'),
         }),
     });
+}
 
-    return admin.messaging();
+export function getFCM() {
+    try {
+        if (!app) initFirebase();
+        return admin.messaging();
+    } catch (err) {
+        console.error('Firebase Admin init failed:', err);
+        return null;
+    }
 }
